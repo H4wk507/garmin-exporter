@@ -3,24 +3,30 @@
 Export your Garmin Connect activities (CSV) and wellness metrics - sleep, HRV,
 VO2max, Training Status, Training Readiness (JSON).
 
+## Install
+
+The package is published on [PyPI](https://pypi.org/project/garmin-exporter/),
+so the recommended way to install it is with `uv` or `pip`:
+
+```bash
+# with uv (recommended)
+uv tool install garmin-exporter
+
+# or with pip
+pip install garmin-exporter
+```
+
 ## Quickstart
 
-1. Install uv:
-
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+# Show help
+garmin-exporter --help
 
-2. Install dependencies:
+# Export activities to CSV + wellness metrics (sleep, HRV, VO2max, ...) to JSON
+garmin-exporter --wellness
 
-```bash
-uv sync
-```
-
-3. Run:
-
-```bash
-uv run garmin-exporter --wellness
+# Also add per-activity HR time-in-zones
+garmin-exporter --hr-zones
 ```
 
 On the first run it asks for your Garmin email, password, and MFA code (if

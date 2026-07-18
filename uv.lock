@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-07-11T18:25:15.023531Z"
+exclude-newer = "2026-07-11T19:15:30.621303Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -285,7 +285,7 @@ wheels = [
 
 [[package]]
 name = "garmin-exporter"
-version = "0.0.1"
+version = "0.0.2"
 source = { editable = "." }
 dependencies = [
     { name = "garminconnect" },
