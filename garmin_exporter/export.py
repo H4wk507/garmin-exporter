@@ -28,6 +28,19 @@ def _iso_week(dt: datetime | None) -> str | None:
     return f"{iso.year}-W{iso.week:02d}"
 
 
+def _mmss(seconds: float | None) -> str | None:
+    if not seconds or seconds <= 0:
+        return None
+    m, s = divmod(int(round(seconds)), 60)
+    return f"{m}:{s:02d}"
+
+
+def _pace_per_km(distance_m: float | None, duration_s: float | None) -> str | None:
+    if not distance_m or distance_m <= 0 or not duration_s:
+        return None
+    return _mmss(duration_s / (distance_m / 1000))
+
+
 def activity_row(a: dict[str, Any]) -> dict[str, Any]:
     local = _parse_dt(a.get("startTimeLocal"))
     distance_m = _num(a.get("distance"))
@@ -69,6 +82,62 @@ def activity_row(a: dict[str, Any]) -> dict[str, Any]:
         "steps": _num(a.get("steps")),
         "location": a.get("locationName"),
     }
+
+
+def _age(birth_date: str | None) -> int | None:
+    born = _parse_dt(birth_date)
+    if born is None:
+        return None
+    today = datetime.now()
+    return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+
+
+def profile_summary(profile: Any) -> dict[str, Any]:
+    ud = (profile or {}).get("userData") or {}
+    weight_g = _num(ud.get("weight"))
+    speed_mps = _num(ud.get("lactateThresholdSpeed"))
+    return {
+        "age": _age(ud.get("birthDate")),
+        "birth_date": ud.get("birthDate"),
+        "gender": ud.get("gender"),
+        "weight_kg": (weight_g / 1000) if weight_g else None,
+        "height_cm": _num(ud.get("height")),
+        "vo2max_running": _num(ud.get("vo2MaxRunning")),
+        "vo2max_cycling": _num(ud.get("vo2MaxCycling")),
+        "lthr_bpm": ud.get("lactateThresholdHeartRate"),
+        "threshold_pace_mps": speed_mps,
+        "threshold_pace_per_km": _mmss(1000 / speed_mps) if speed_mps else None,
+        # Garmin sometimes stores an uncalibrated placeholder here (< 1 m/s is
+        # slower than ~16:40/km, impossible as a running threshold).
+        "threshold_pace_suspect": speed_mps is not None and speed_mps < 1.0,
+    }
+
+
+def split_rows(activity_id: Any, splits: Any) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for lap in (splits or {}).get("lapDTOs") or []:
+        distance_m = _num(lap.get("distance"))
+        duration_s = _num(lap.get("duration"))
+        rows.append(
+            {
+                "activity_id": activity_id,
+                "lap_index": lap.get("lapIndex"),
+                "distance_km": (distance_m / 1000) if distance_m else None,
+                "duration_seconds": duration_s,
+                "pace_per_km": _pace_per_km(distance_m, duration_s),
+                "avg_speed_mps": _num(lap.get("averageSpeed")),
+                "max_speed_mps": _num(lap.get("maxSpeed")),
+                "avg_hr": _num(lap.get("averageHR")),
+                "max_hr": _num(lap.get("maxHR")),
+                "avg_run_cadence": _num(lap.get("averageRunCadence")),
+                "max_run_cadence": _num(lap.get("maxRunCadence")),
+                "avg_power": _num(lap.get("averagePower")),
+                "max_power": _num(lap.get("maxPower")),
+                "elevation_gain_m": _num(lap.get("elevationGain")),
+                "elevation_loss_m": _num(lap.get("elevationLoss")),
+            }
+        )
+    return rows
 
 
 def to_rows(activities: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -140,13 +209,11 @@ def _activity_summary(summary: Any) -> dict[str, Any]:
     }
 
 
-def wellness_day(sleep: Any, stress: Any, hrv: Any, readiness: Any, summary: Any) -> dict[str, Any]:
+def wellness_day(sleep: Any, stress: Any, hrv: Any, summary: Any) -> dict[str, Any]:
     stress = stress or {}
-    readiness_row = readiness[0] if isinstance(readiness, list) and readiness else (readiness or None)
     return {
         "sleep": _sleep_summary(sleep),
         "stress": {"max": stress.get("maxStressLevel"), "avg": stress.get("avgStressLevel")},
         "hrv": (hrv or {}).get("hrvSummary"),
-        "training_readiness": readiness_row,
         "activity": _activity_summary(summary),
     }

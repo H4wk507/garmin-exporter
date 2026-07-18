@@ -54,15 +54,18 @@ class GarminClient:
     def get_training_status(self, day: str) -> Any:
         return self._api.get_training_status(day)
 
-    def get_training_readiness(self, day: str) -> Any:
-        return self._api.get_training_readiness(day)
-
     def get_user_summary(self, day: str) -> Any:
         return self._api.get_user_summary(day)
+
+    def get_user_profile(self) -> Any:
+        return self._api.get_user_profile()
 
     def get_hr_zones(self, activity_id: int) -> Any:
         """Per-activity HR time-in-zones (one extra API call per activity)."""
         return self._api.get_activity_hr_in_timezones(activity_id)
+
+    def get_activity_splits(self, activity_id: int) -> Any:
+        return self._api.get_activity_splits(activity_id)
 
     def _authenticate(self) -> None:
         token = load_session()
