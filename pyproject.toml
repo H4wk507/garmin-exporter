@@ -1,0 +1,45 @@
+[project]
+name = "garmin-exporter"
+version = "0.0.1"
+description = "Export Garmin Connect activities and wellness data to CSV/JSON."
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "garminconnect>=0.3.6",
+    "keyring>=25.7.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.1.0",
+    "ruff>=0.15.20",
+]
+
+[project.scripts]
+garmin-exporter = "garmin_exporter.main:main"
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+
+[tool.uv]
+exclude-newer = "7 days"
+
+[tool.ruff]
+line-length = 120
+# pyflakes, pycodestyle, isort
+lint.select = ["F", "E", "W", "I001"]
+
+[tool.mypy]
+python_version = "3.12"
+
+[[tool.mypy.overrides]]
+module = ["garminconnect.*"]
+ignore_missing_imports = true
