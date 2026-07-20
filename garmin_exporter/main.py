@@ -14,7 +14,8 @@ from garmin_exporter.export import (
     profile_summary,
     split_rows,
     to_rows,
-    wellness_day,
+    training_snapshot,
+    wellness_row,
     write_csv,
     write_json,
 )
@@ -29,29 +30,32 @@ def _safe(label: str, fn: Any) -> Any:
         return None
 
 
-def _wellness(client: GarminClient, days: int) -> dict[str, Any]:
+def _wellness_rows(client: GarminClient, days: int) -> list[dict[str, Any]]:
     today = date.today()
     dates = [(today - timedelta(days=n)).isoformat() for n in range(days + 1)]
-    by_day: dict[str, Any] = {}
+    rows: list[dict[str, Any]] = []
     for i, d in enumerate(dates, 1):
-        day = _safe(
-            f"wellness {d}",
-            lambda d=d: wellness_day(
-                client.get_sleep(d),
-                client.get_stress(d),
-                client.get_hrv(d),
-                client.get_user_summary(d),
-            ),
+        rows.append(
+            wellness_row(
+                d,
+                _safe(f"sleep {d}", lambda d=d: client.get_sleep(d)),
+                _safe(f"stress {d}", lambda d=d: client.get_stress(d)),
+                _safe(f"hrv {d}", lambda d=d: client.get_hrv(d)),
+                _safe(f"summary {d}", lambda d=d: client.get_user_summary(d)),
+                _safe(f"training status {d}", lambda d=d: client.get_training_status(d)),
+            )
         )
-        if day is not None:
-            by_day[d] = day
         if i % 30 == 0 or i == len(dates):
             print(f"  wellness {i}/{len(dates)} days...")
+    return rows
+
+
+def _profile(client: GarminClient) -> dict[str, Any]:
+    today = date.today().isoformat()
+    status = _safe("training status", lambda: client.get_training_status(today))
     return {
         "profile": _safe("profile", lambda: profile_summary(client.get_user_profile())),
-        "vo2max": _safe("vo2max", lambda: client.get_vo2max(today.isoformat())),
-        "training_status": _safe("training_status", lambda: client.get_training_status(today.isoformat())),
-        "by_day": by_day,
+        "training_snapshot": training_snapshot(status),
     }
 
 
@@ -63,7 +67,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--wellness",
         action="store_true",
-        help="Also write <output>.wellness.json (sleep, HRV, profile, thresholds, ...).",
+        help="Also write <output>.wellness.csv (daily sleep, HRV, Training Status, ...) "
+        "and <output>.profile.json (profile, thresholds, load balance).",
     )
     parser.add_argument(
         "--wellness-days",
@@ -129,10 +134,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.wellness:
         print(f"Fetching wellness for {args.wellness_days} days...")
-        wellness_path = out.with_name(f"{out.stem}.wellness.json")
         try:
-            write_json(_wellness(client, args.wellness_days), wellness_path)
-            print(f"Wrote wellness data to {wellness_path}")
+            wellness_path = out.with_name(f"{out.stem}.wellness.csv")
+            wellness = _wellness_rows(client, args.wellness_days)
+            write_csv(wellness, wellness_path)
+            print(f"Wrote {len(wellness)} wellness days to {wellness_path}")
+
+            profile_path = out.with_name(f"{out.stem}.profile.json")
+            write_json(_profile(client), profile_path)
+            print(f"Wrote profile to {profile_path}")
         except Exception as exc:  # noqa: BLE001
             print(f"Skipped wellness ({exc}).", file=sys.stderr)
 

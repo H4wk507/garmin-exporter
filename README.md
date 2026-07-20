@@ -1,9 +1,13 @@
 # garmin-exporter
 
-Export your Garmin Connect activities (CSV), per-run km splits (CSV), and
-wellness metrics - sleep, HRV, VO2max, Training Status, plus your profile
-(age, sex, weight, height) and configured thresholds (LTHR, threshold pace)
-(JSON).
+Export your Garmin Connect activities
+
+| File                      | Contents                                                                                |
+| ------------------------- | --------------------------------------------------------------------------------------- |
+| `activities.csv`          | One row per activity (distance, pace, HR, power, training load, VO2max, ...)            |
+| `activities.splits.csv`   | One row per km split, with `--splits`                                                   |
+| `activities.wellness.csv` | One row per day: sleep, HRV, stress, steps, Training Status and ACWR, with `--wellness` |
+| `activities.profile.json` | Profile (age, sex, weight, height), thresholds (LTHR, pace) and monthly load balance    |
 
 ## Install
 
@@ -24,8 +28,8 @@ pip install garmin-exporter
 # Show help
 garmin-exporter --help
 
-# Export activities to CSV + a year of wellness metrics (sleep, HRV, VO2max,
-# profile, thresholds, ...) to JSON
+# Export activities to CSV + a year of daily wellness metrics (sleep, HRV,
+# Training Status, ...) to CSV, plus profile and thresholds to JSON
 garmin-exporter --wellness
 
 # Shorter wellness window (e.g. last 30 days)
@@ -44,16 +48,16 @@ is never saved. Later runs reuse the session.
 
 ## Options
 
-| Flag                | Description                                               |
-| ------------------- | --------------------------------------------------------- |
-| `-o, --output`      | Output CSV path (default: `activities.csv`)               |
-| `--days-back N`     | Only the last N days (default: all activities)            |
-| `--activity-type T` | Garmin type key, e.g. `running` (default: all)            |
-| `--wellness`        | Also write `<output>.wellness.json`                       |
-| `--wellness-days N` | Days of wellness history with `--wellness` (default: 365) |
-| `--hr-zones`        | Add per-activity HR time-in-zones (+1 call each)          |
-| `--splits`          | Write per-run km splits to `<output>.splits.csv`          |
-| `--reset-login`     | Forget the stored session and log in again                |
+| Flag                | Description                                                  |
+| ------------------- | ------------------------------------------------------------ |
+| `-o, --output`      | Output CSV path (default: `activities.csv`)                  |
+| `--days-back N`     | Only the last N days (default: all activities)               |
+| `--activity-type T` | Garmin type key, e.g. `running` (default: all)               |
+| `--wellness`        | Also write `<output>.wellness.csv` + `<output>.profile.json` |
+| `--wellness-days N` | Days of wellness history with `--wellness` (default: 365)    |
+| `--hr-zones`        | Add per-activity HR time-in-zones (+1 call each)             |
+| `--splits`          | Write per-run km splits to `<output>.splits.csv`             |
+| `--reset-login`     | Forget the stored session and log in again                   |
 
 ## Development
 

@@ -48,9 +48,6 @@ class GarminClient:
     def get_stress(self, day: str) -> Any:
         return self._api.get_stress_data(day)
 
-    def get_vo2max(self, day: str) -> Any:
-        return self._api.get_max_metrics(day)
-
     def get_training_status(self, day: str) -> Any:
         return self._api.get_training_status(day)
 

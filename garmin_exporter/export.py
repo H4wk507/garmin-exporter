@@ -9,7 +9,7 @@ from typing import Any
 
 
 def _num(value: float | None) -> float | None:
-    return None if value is None else float(value)
+    return None if value is None else round(float(value), 3)
 
 
 def _parse_dt(value: str | None) -> datetime | None:
@@ -96,20 +96,19 @@ def profile_summary(profile: Any) -> dict[str, Any]:
     ud = (profile or {}).get("userData") or {}
     weight_g = _num(ud.get("weight"))
     speed_mps = _num(ud.get("lactateThresholdSpeed"))
+    suspect = speed_mps is not None and speed_mps < 1.0
     return {
         "age": _age(ud.get("birthDate")),
         "birth_date": ud.get("birthDate"),
         "gender": ud.get("gender"),
-        "weight_kg": (weight_g / 1000) if weight_g else None,
+        "weight_kg": round(weight_g / 1000, 3) if weight_g else None,
         "height_cm": _num(ud.get("height")),
         "vo2max_running": _num(ud.get("vo2MaxRunning")),
         "vo2max_cycling": _num(ud.get("vo2MaxCycling")),
         "lthr_bpm": ud.get("lactateThresholdHeartRate"),
-        "threshold_pace_mps": speed_mps,
-        "threshold_pace_per_km": _mmss(1000 / speed_mps) if speed_mps else None,
-        # Garmin sometimes stores an uncalibrated placeholder here (< 1 m/s is
-        # slower than ~16:40/km, impossible as a running threshold).
-        "threshold_pace_suspect": speed_mps is not None and speed_mps < 1.0,
+        "threshold_pace_mps": None if suspect else speed_mps,
+        "threshold_pace_per_km": None if suspect or not speed_mps else _mmss(1000 / speed_mps),
+        "threshold_pace_suspect": suspect,
     }
 
 
@@ -160,8 +159,9 @@ def hr_zone_seconds(zones: Any) -> dict[str, Any]:
 def write_csv(rows: list[dict[str, Any]], path: str | Path) -> None:
     if not rows:
         return
+    fieldnames = list(dict.fromkeys(key for row in rows for key in row))
     with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 
@@ -177,18 +177,61 @@ def _sleep_summary(sleep: Any) -> dict[str, Any]:
     src = sleep or {}
     return {
         "sleep_seconds": dto.get("sleepTimeSeconds"),
-        "deep_seconds": dto.get("deepSleepSeconds"),
-        "light_seconds": dto.get("lightSleepSeconds"),
-        "rem_seconds": dto.get("remSleepSeconds"),
-        "awake_seconds": dto.get("awakeSleepSeconds"),
+        "sleep_deep_seconds": dto.get("deepSleepSeconds"),
+        "sleep_light_seconds": dto.get("lightSleepSeconds"),
+        "sleep_rem_seconds": dto.get("remSleepSeconds"),
+        "sleep_awake_seconds": dto.get("awakeSleepSeconds"),
         "sleep_score": overall.get("value"),
-        "avg_respiration": dto.get("averageRespirationValue"),
-        "avg_sleep_stress": dto.get("avgSleepStress"),
-        "avg_hr": dto.get("avgHeartRate"),
+        "sleep_avg_respiration": _num(dto.get("averageRespirationValue")),
+        "sleep_avg_stress": _num(dto.get("avgSleepStress")),
+        "sleep_avg_hr": _num(dto.get("avgHeartRate")),
         "resting_hr": src.get("restingHeartRate"),
-        "avg_overnight_hrv": src.get("avgOvernightHrv"),
-        "hrv_status": src.get("hrvStatus"),
         "body_battery_change": src.get("bodyBatteryChange"),
+    }
+
+
+def _hrv_summary(hrv: Any) -> dict[str, Any]:
+    summary = (hrv or {}).get("hrvSummary") or {}
+    baseline = summary.get("baseline") or {}
+    return {
+        "hrv_last_night_avg": summary.get("lastNightAvg"),
+        "hrv_weekly_avg": summary.get("weeklyAvg"),
+        "hrv_last_night_5min_high": summary.get("lastNight5MinHigh"),
+        "hrv_status": summary.get("status"),
+        "hrv_baseline_low_upper": baseline.get("lowUpper"),
+        "hrv_baseline_balanced_low": baseline.get("balancedLow"),
+        "hrv_baseline_balanced_upper": baseline.get("balancedUpper"),
+    }
+
+
+def _primary_device_entry(by_device: Any) -> dict[str, Any]:
+    entries = list((by_device or {}).values())
+    for entry in entries:
+        if entry.get("primaryTrainingDevice"):
+            return dict(entry)
+    return dict(entries[0]) if entries else {}
+
+
+def _status_label(phrase: str | None) -> str | None:
+    if not phrase:
+        return None
+    head, _, tail = phrase.rpartition("_")
+    return head if head and tail.isdigit() else phrase
+
+
+def _training_day(training_status: Any) -> dict[str, Any]:
+    latest = (training_status or {}).get("mostRecentTrainingStatus") or {}
+    status = _primary_device_entry(latest.get("latestTrainingStatusData"))
+    acute = status.get("acuteTrainingLoadDTO") or {}
+    return {
+        "training_status": _status_label(status.get("trainingStatusFeedbackPhrase")),
+        "training_status_sport": status.get("sport"),
+        "training_status_since": status.get("sinceDate"),
+        "fitness_trend": status.get("fitnessTrend"),
+        "acwr": _num(acute.get("dailyAcuteChronicWorkloadRatio")),
+        "acwr_status": acute.get("acwrStatus"),
+        "load_acute": _num(acute.get("dailyTrainingLoadAcute")),
+        "load_chronic": _num(acute.get("dailyTrainingLoadChronic")),
     }
 
 
@@ -201,7 +244,7 @@ def _activity_summary(summary: Any) -> dict[str, Any]:
         "distance_m": s.get("totalDistanceMeters"),
         "moderate_intensity_min": s.get("moderateIntensityMinutes"),
         "vigorous_intensity_min": s.get("vigorousIntensityMinutes"),
-        "floors_ascended_m": s.get("floorsAscendedInMeters"),
+        "floors_ascended_m": _num(s.get("floorsAscendedInMeters")),
         "highly_active_seconds": s.get("highlyActiveSeconds"),
         "active_seconds": s.get("activeSeconds"),
         "sedentary_seconds": s.get("sedentarySeconds"),
@@ -209,11 +252,47 @@ def _activity_summary(summary: Any) -> dict[str, Any]:
     }
 
 
-def wellness_day(sleep: Any, stress: Any, hrv: Any, summary: Any) -> dict[str, Any]:
+def wellness_row(
+    day: str,
+    sleep: Any,
+    stress: Any,
+    hrv: Any,
+    summary: Any,
+    training_status: Any,
+) -> dict[str, Any]:
     stress = stress or {}
     return {
-        "sleep": _sleep_summary(sleep),
-        "stress": {"max": stress.get("maxStressLevel"), "avg": stress.get("avgStressLevel")},
-        "hrv": (hrv or {}).get("hrvSummary"),
-        "activity": _activity_summary(summary),
+        "date": day,
+        **_sleep_summary(sleep),
+        **_hrv_summary(hrv),
+        "stress_avg": stress.get("avgStressLevel"),
+        "stress_max": stress.get("maxStressLevel"),
+        **_training_day(training_status),
+        **_activity_summary(summary),
+    }
+
+
+def training_snapshot(training_status: Any) -> dict[str, Any]:
+    load_balance = (training_status or {}).get("mostRecentTrainingLoadBalance") or {}
+    balance = _primary_device_entry(load_balance.get("metricsTrainingLoadBalanceDTOMap"))
+    devices = load_balance.get("recordedDevices") or []
+    return {
+        "as_of": balance.get("calendarDate"),
+        "device": next((d.get("deviceName") for d in devices if d.get("deviceName")), None),
+        "load_aerobic_low": _num(balance.get("monthlyLoadAerobicLow")),
+        "load_aerobic_low_target": [
+            balance.get("monthlyLoadAerobicLowTargetMin"),
+            balance.get("monthlyLoadAerobicLowTargetMax"),
+        ],
+        "load_aerobic_high": _num(balance.get("monthlyLoadAerobicHigh")),
+        "load_aerobic_high_target": [
+            balance.get("monthlyLoadAerobicHighTargetMin"),
+            balance.get("monthlyLoadAerobicHighTargetMax"),
+        ],
+        "load_anaerobic": _num(balance.get("monthlyLoadAnaerobic")),
+        "load_anaerobic_target": [
+            balance.get("monthlyLoadAnaerobicTargetMin"),
+            balance.get("monthlyLoadAnaerobicTargetMax"),
+        ],
+        "balance_feedback": balance.get("trainingBalanceFeedbackPhrase"),
     }
