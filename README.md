@@ -58,6 +58,8 @@ is never saved. Later runs reuse the session.
 | `--hr-zones`        | Add per-activity HR time-in-zones (+1 call each)             |
 | `--splits`          | Write per-run km splits to `<output>.splits.csv`             |
 | `--reset-login`     | Forget the stored session and log in again                   |
+| `--no-cache`        | Ignore the on-disk cache and refetch everything              |
+| `--cache-dir PATH`  | Override the cache location (default: OS cache dir)          |
 
 ## Development
 

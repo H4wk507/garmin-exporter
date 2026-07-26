@@ -6,12 +6,14 @@ from typing import Any
 
 from garminconnect import Garmin
 
+from garmin_exporter.cache import Cache, is_volatile
 from garmin_exporter.keyring import load_session, save_session
 
 
 class GarminClient:
-    def __init__(self) -> None:
+    def __init__(self, cache: Cache | None = None) -> None:
         self._api = Garmin()
+        self._cache = cache or Cache(enabled=False)
         self._authenticate()
 
     def get_activities(
@@ -40,29 +42,33 @@ class GarminClient:
         return found
 
     def get_sleep(self, day: str) -> Any:
-        return self._api.get_sleep_data(day)
+        return self._cache.get_or_fetch("sleep", day, lambda: self._api.get_sleep_data(day), is_volatile(day))
 
     def get_hrv(self, day: str) -> Any:
-        return self._api.get_hrv_data(day)
+        return self._cache.get_or_fetch("hrv", day, lambda: self._api.get_hrv_data(day), is_volatile(day))
 
     def get_stress(self, day: str) -> Any:
-        return self._api.get_stress_data(day)
+        return self._cache.get_or_fetch("stress", day, lambda: self._api.get_stress_data(day), is_volatile(day))
 
     def get_training_status(self, day: str) -> Any:
-        return self._api.get_training_status(day)
+        return self._cache.get_or_fetch(
+            "training_status", day, lambda: self._api.get_training_status(day), is_volatile(day)
+        )
 
     def get_user_summary(self, day: str) -> Any:
-        return self._api.get_user_summary(day)
+        return self._cache.get_or_fetch("summary", day, lambda: self._api.get_user_summary(day), is_volatile(day))
 
     def get_user_profile(self) -> Any:
         return self._api.get_user_profile()
 
     def get_hr_zones(self, activity_id: int) -> Any:
         """Per-activity HR time-in-zones (one extra API call per activity)."""
-        return self._api.get_activity_hr_in_timezones(activity_id)
+        return self._cache.get_or_fetch(
+            "hr_zones", str(activity_id), lambda: self._api.get_activity_hr_in_timezones(activity_id)
+        )
 
     def get_activity_splits(self, activity_id: int) -> Any:
-        return self._api.get_activity_splits(activity_id)
+        return self._cache.get_or_fetch("splits", str(activity_id), lambda: self._api.get_activity_splits(activity_id))
 
     def _authenticate(self) -> None:
         token = load_session()
